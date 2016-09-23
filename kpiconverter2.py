@@ -6,6 +6,51 @@ Created on Sat Sep 17 11:24:50 2016
 """
 
 #import file
+
+def converMunicipalNamesToCodes():
+    dictionaryFile = open("simplified_municipality_indicators.csv", 'r');    
+    dictlines = dictionaryFile.readlines()
+    dictionaryFile.close()    
+    dictionary = {}
+    for dline in dictlines:
+        strLine = str(dline)
+        strLine = strLine.split(',')
+        if strLine[0] == "code":
+            continue ##skipping first line
+        #print strLine[1]
+        string = repr(strLine[1])
+        dictionary.update({string:strLine[0]})
+    #print dictionary #test
+    #print dictionary.get(repr('V\xc3\xa4nersborg')) #test
+    
+    kpiFile = open("school_fire_cases_1998_2014.csv", 'r')
+    newkpifile = open("school_fire_cases_1998_2014_wcodes1.csv", 'w')
+    lines = kpiFile.readlines()
+    kpiFile.close
+    
+    for line in lines:
+        line = line.replace('\n','')
+        strLine = str(line)
+        strLine = strLine.split(',')
+        cityname = repr(strLine[0]).replace('"','')
+        #print cityname
+#==============================================================================
+#         if strLine[1] == 'Cases':
+#             print "skipping"
+#             newkpifile.write(str(line) + ', code\n')
+#==============================================================================
+        #print cityname
+        #print dictionary.get(cityname)
+        dashit = dictionary.get(cityname)
+        if dashit is None:
+            newkpifile.write(line + ', code\n')
+        else:
+            newkpifile.write(line + ','+ dashit +'\n')
+        
+        newkpifile.close
+
+
+#bruges til at finde indexet for de forskellige år såden ikke skal lede milioner af linier igennem
 def getIndeces(datafile, year):
     lines = datafile.readlines();
     counter = 0    
@@ -28,7 +73,9 @@ def getIndeces(datafile, year):
         prevYear = strLine[1]
     return (indexStart, indexEnd)
     #print str(indexStart) + ', ' + str(indexEnd)    
-        
+
+#utrækker en liste der beskriver hvilke årstal datasættet indeholder, kan bruges til at finde index, oprette filer, 
+#og til at begrændse søgningnen i filen         
 def extractPeriods(datafile):
     lines = datafile.readlines();
     yearList = [] 
@@ -41,6 +88,7 @@ def extractPeriods(datafile):
             yearList.append(strLine[1])
     return yearList    
 
+##skal være skriptet der opretter filen der skrives til og som transformerer datasættet
 def reorganizeData(year, inputFile):
     kpiFile = file
     interval = getIndeces(year)
@@ -128,8 +176,9 @@ def reorganizeData(year, inputFile):
     
     newKpiFile.close
     
-kpiFile = open("/home/thor/Desktop/5.semester/swedish-school-fires/kpis_2009_2011.csv", 'r');
+#kpiFile = open("/home/thor/Desktop/5.semester/swedish-school-fires/kpis_2009_2011.csv", 'r');
 #newKpiFile = open('/home/thor/Desktop/5.semester/swedish-school-fires/plebtest2.csv', 'w')
-getIndeces(kpiFile, "2010")
+#getIndeces(kpiFile, "2010")
 #extractPeriods(kpiFile)
-kpiFile.close
+#kpiFile.close
+converMunicipalNamesToCodes()
