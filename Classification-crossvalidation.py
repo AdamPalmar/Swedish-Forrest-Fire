@@ -2,7 +2,7 @@
 """
 Created on Fri Nov 04 13:10:45 2016
 
-@author: Thor
+@author: Adam
 """
 
 ##crossvalidation and forward feature selection on regression for reported crime
@@ -69,7 +69,7 @@ max_epochs = 1000       # stop criterion 2 (max epochs in training)
 
 ## Crossvalidation
 # Create crossvalidation partition for evaluation
-K = 10
+K = 2
 CV = cross_validation.KFold(N,K,shuffle=True)
 
 # Initialize variables
@@ -86,6 +86,11 @@ Error_train_nn = np.empty((K,1))
 Error_test_nn = np.empty((K,1))
 Error_list_fs = list()
 Error_list_nn = list()
+
+bestnet = list()
+error_hist = np.zeros((max_epochs,K))
+errors = np.zeros(K)
+
 k=0
 for train_index, test_index in CV:
     
@@ -113,16 +118,33 @@ for train_index, test_index in CV:
     Error_train_fs[k] = float(abs(y_train.T-m.predict(X_train[:,selected_features])).sum())/y_train.shape[0]
     Error_test_fs[k] = float(abs(y_test.T-m.predict(X_test[:,selected_features])).sum())/y_test.shape[0]
     Error_list_fs.append(abs(y_test-m.predict(X_test[:,selected_features])))
+    
     #Compute neural network
-    #ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
-    # train network 
-    #list_of_training_errors = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(100))    
-    #Error_train_nn[k] = list_of_training_errors[-1]  
-    #Error_test_nn[k] = np.square(y_test-ann.sim(X_test)).sum()/y_test.shape[0]
-    #Error_list_nn.append(abs(y_test - ann.sim(X_test)))
+   # ann = nl.net.newff([[0, 1], [0, 1]], [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
+    
+    # train network
+    best_train_error = 1e100
+    for i in range(n_train):
+        # Create randomly initialized network with 2 layers
+        ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
+        # train network
+        train_error = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))
+        if train_error[-1]<best_train_error:
+            bestnet.append(ann)
+            best_train_error = train_error[-1]
+            error_hist[range(len(train_error)),k] = train_error
+    y_est = bestnet[k].sim(X_test)
+    y_est = (y_est>.5).astype(int)
+    errors[k] = (y_est!=y_test).sum().astype(float)/y_test.shape[0]
+    print('Error rate: {0}%'.format(100*mean(errors)))
+    #train_error             = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))
+    list_of_training_errors = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))    
+    Error_train_nn[k] = list_of_training_errors[-1]  
+    Error_test_nn[k] = np.square(y_test-ann.sim(X_test)).sum()/y_test.shape[0]
+    Error_list_nn.append(abs(y_test - ann.sim(X_test)))
     
     #Decision tree
-    d_tree = DecisionTreeClassifier(min_samples_split=150).fit(X_train,y_train)
+    d_tree = DecisionTreeClassifier(min_samples_split=80).fit(X_train,y_train)
     Error_train_decision_tree[k] = float(abs(y_train.T-d_tree.predict(X_train)).sum())/y_train.shape[0]
     Error_test_decision_tree[k] = float(abs(y_test.T-d_tree.predict(X_test)).sum())/y_test.shape[0]
     
