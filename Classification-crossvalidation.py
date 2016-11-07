@@ -16,6 +16,7 @@ from sklearn import cross_validation
 import pandas as pd
 import neurolab as nl
 from toolbox_02450 import feature_selector_lr, bmplot
+from scipy import stats
 
 # Load data from matlab file
 #data = loadmat('../Data/body.mat')
@@ -84,7 +85,9 @@ Error_train_decision_tree = np.empty((K,1))
 Error_test_decision_tree = np.empty((K,1))
 Error_train_nn = np.empty((K,1))
 Error_test_nn = np.empty((K,1))
-Error_list_fs = list()
+Error_list_logistic_regression_fs = list()
+Error_list_logistic_regression_all = list()
+Error_list_decision_tree = list()
 Error_list_nn = list()
 
 bestnet = list()
@@ -106,10 +109,11 @@ for train_index, test_index in CV:
     Error_test_nofeatures[k] = float(abs(0-y_train).sum())/y_train.shape[0]
 
     # Compute squared error with all features selected (no feature selection)
-    m = lm.LogisticRegression().fit(X_train, y_train)
-    Error_train[k] = float(abs(y_train.T-m.predict(X_train)).sum())/y_train.shape[0]
-    Error_test[k] = float(abs(y_test.T-m.predict(X_test)).sum())/y_test.shape[0]
-
+    m_all_attributes = lm.LogisticRegression().fit(X_train, y_train)
+    Error_train[k] = float(abs(y_train.T-m_all_attributes.predict(X_train)).sum())/y_train.shape[0]
+    Error_test[k] = float(abs(y_test.T-m_all_attributes.predict(X_test)).sum())/y_test.shape[0]
+    Error_list_logistic_regression_all.append(abs(y_test.T-m_all_attributes.predict(X_test)))
+    
     # Compute squared error with feature subset selection
     selected_features, features_record, loss_record = feature_selector_lr(X_train, y_train, internal_cross_validation)
     Features[selected_features,k]=1
@@ -117,7 +121,7 @@ for train_index, test_index in CV:
     m = lm.LogisticRegression().fit(X_train[:,selected_features], y_train)
     Error_train_fs[k] = float(abs(y_train.T-m.predict(X_train[:,selected_features])).sum())/y_train.shape[0]
     Error_test_fs[k] = float(abs(y_test.T-m.predict(X_test[:,selected_features])).sum())/y_test.shape[0]
-    Error_list_fs.append(abs(y_test-m.predict(X_test[:,selected_features])))
+    Error_list_logistic_regression_fs.append(abs(y_test.T-m.predict(X_test[:,selected_features])))
     
     #Compute neural network
     #ann = nl.net.newff([[0, 1], [0, 1]], [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
@@ -135,6 +139,7 @@ for train_index, test_index in CV:
             best_train_error = train_error[-1]
             error_hist[range(len(train_error)),k] = train_error
     y_est = bestnet[k].sim(X_test)
+
     y_est = (y_est>.5).astype(int)
     errors[k] = (y_est!=y_test).sum().astype(float)/y_test.shape[0]
     print('Error rate: {0}%'.format(100*mean(errors)))
@@ -142,13 +147,16 @@ for train_index, test_index in CV:
     list_of_training_errors = ann.train(X_train, y_train, epochs=max_epochs, show=round(max_epochs/8))    
     Error_train_nn[k] = list_of_training_errors[-1]  
     Error_test_nn[k] = np.square(y_test-ann.sim(X_test)).sum()/y_test.shape[0]
-    Error_list_nn.append(abs(y_test - ann.sim(X_test)))
+    
+    Error_for_nn = bestnet[k].sim(X_test)
+    Error_for_nn = (Error_for_nn>.5).astype(int)
+    Error_list_nn.append((y_est!=y_test).astype(int))
     
     #Decision tree
     d_tree = DecisionTreeClassifier(min_samples_split=80).fit(X_train,y_train)
     Error_train_decision_tree[k] = float(abs(y_train.T-d_tree.predict(X_train)).sum())/y_train.shape[0]
     Error_test_decision_tree[k] = float(abs(y_test.T-d_tree.predict(X_test)).sum())/y_test.shape[0]
-    
+    Error_list_decision_tree.append(abs(y_test.T-d_tree.predict(X_test)))
     
     figure(k)
     subplot(1,2,1)
@@ -186,6 +194,10 @@ print('\n')
 print('Decision tree classifier:')
 print('- Training error: {0}'.format((Error_train_decision_tree).mean()))
 print('- Test error:     {0}'.format((Error_test_decision_tree).mean()))
+print('Neural network classifier')
+print('- Test error:     {0}'.format((errors).mean()))
+
+
 
 
 
@@ -205,49 +217,75 @@ ylabel('Attribute')
 # Inspect selected feature coefficients effect on the entire dataset and
 # plot the fitted model residual error as function of each attribute to
 # inspect for systematic structure in the residual
-f=2 # cross-validation fold to inspect
-ff=Features[:,f-1].nonzero()[0]
-m = lm.LogisticRegression().fit(X[:,ff], y)
+#==============================================================================
+# f=2 # cross-validation fold to inspect
+# ff=Features[:,f-1].nonzero()[0]
+# m = lm.LogisticRegression().fit(X[:,ff], y)
+# 
+# y_est= m.predict(X[:,ff])
+# residual=y-y_est
+# 
+# figure(k+1)
+# title('Residual error vs. Attributes for features selected in cross-validation fold {0}'.format(f))
+# for i in range(0,len(ff)):
+#    subplot(2,ceil(len(ff)/2.0),i+1)
+#    plot(X[:,ff[i]].A,residual.A,'.')
+#    xlabel(attributeNames[ff[i]])
+#    ylabel('residual error')
+# 
+# show() 
+#==============================================================================
 
-y_est= m.predict(X[:,ff])
-residual=y-y_est
-
-figure(k+1)
-title('Residual error vs. Attributes for features selected in cross-validation fold {0}'.format(f))
-for i in range(0,len(ff)):
-   subplot(2,ceil(len(ff)/2.0),i+1)
-   plot(X[:,ff[i]].A,residual.A,'.')
-   xlabel(attributeNames[ff[i]])
-   ylabel('residual error')
-
-show() 
-
-#t_test_fs = Error_list_fs[-1]
-#t_test_nn = Error_list_nn[-1]
+t_test_fs = Error_list_logistic_regression_fs[-1].T
+t_test_decision_tree = Error_list_decision_tree[-1].T
+t_test_log_all = Error_list_logistic_regression_all[-1].T
    
 #==============================================================================
-# t_test_average = abs(y_test - np.mean(y_train))
+t_test_average = abs(y_test)
 # 
 # 
-# [tstatistic, pvalue] = stats.ttest_ind(t_test_fs,t_test_nn)
-# if pvalue<=0.05:
-#      print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
-# else:
-#     print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
-# 
-# [tstatistic, pvalue] = stats.ttest_ind(t_test_fs,t_test_average)
-# if pvalue<=0.05:
-#     print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
-# else:
-#     print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
-# #    
-# # Boxplot to compare classifier error distributions
-# figure()
-# boxplot(np.bmat('t_test_fs,t_test_average'))
-# xlabel('Linear Regression FS  vs.   Neural net')
-# ylabel('Cross-validation error [%]')
-# 
-# show()
+#==============================================================================
+[tstatistic, pvalue] = stats.ttest_ind(t_test_fs,t_test_log_all)
+print("\nLogistic regresion all vs logistic regression FS")
+if pvalue<=0.05:
+     print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
+else:
+    print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
+
+
+[tstatistic, pvalue] = stats.ttest_ind(t_test_fs,t_test_decision_tree)
+print("\nLogistic regression fs vs decision tree")
+if pvalue<=0.05:
+     print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
+else:
+    print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
+
+[tstatistic, pvalue] = stats.ttest_ind(t_test_decision_tree,t_test_average)
+print("\nDecision tree vs guessing 0 all times")
+if pvalue<=0.05:
+    print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
+else:
+    print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
+
+[tstatistic, pvalue] = stats.ttest_ind(t_test_log_all,t_test_average)
+print("\nLogistic regression all vs guessing 0 all times")
+if pvalue<=0.05:
+    print('Classifiers are significantly different. (p={0})'.format(pvalue[0]))
+else:
+    print('Classifiers are not significantly different (p={0})'.format(pvalue[0]))        
+#    
+
+# Boxplot to compare classifier error distributions
+figure()
+boxplot(np.bmat('t_test_fs,t_test_decision_tree,t_test_average'))
+xlabel('Linear Regression FS  vs.   Neural net')
+ylabel('Cross-validation error [%]')
+
+show()
+#==============================================================================
 #    
 #==============================================================================
    
+m_entire_dataset_fs = lm.LogisticRegression().fit(X[:,selected_features], y)
+m_entire_dataset_all = lm.LogisticRegression().fit(X[:,:], y)
+
