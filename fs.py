@@ -20,22 +20,11 @@ import neurolab as nl
 from scipy import stats
 from toolbox_02450 import feature_selector_lr, bmplot
 
-# Load data from matlab file
-#data = loadmat('../Data/body.mat')
-#X = np.matrix(mat_data['X'])
-#y = np.matrix(mat_data['y'])
-#attributeNames = [name[0] for name in mat_data['attributeNames'][0]]
-
 
 data = pd.read_csv('cleanSet.csv')
-#print mat_data
-#X = np.matrix(mat_data['X'])
-#y = np.matrix(mat_data['y'], dtype=int)
-#X = np.matrix(mat_data.drop('Cases',axis=1).dropna())
-#y = np.matrix(mat_data['Cases'].apply(f)).T
-#data_normalized = (data - data.mean()) / (data.std())
+
 #X = np.matrix(data_normalized.drop(['reportedCrime','reportedCrimeVandalism'],axis=1).dropna())
-data['youngVsOld'] = (data['populationShare65plus'] / data['youngUnskilled'] )
+#data['youngVsOld'] = (data['populationShare65plus'] / data['youngUnskilled'] )
 data_normalized =  (data - data.mean()) / (data.max() - data.min())
 X = np.matrix(data_normalized.drop(['reportedCrime','reportedCrimeVandalism','urbanDegree'],axis=1).dropna())
 # y = np.matrix((data['Cases'] / data['population']) *1e3)
@@ -57,13 +46,13 @@ n_hidden_units = 40      # number of hidden units
 n_train = 2             # number of networks trained in each k-fold
 
 # These parameters are usually adjusted to: (1) data specifics, (2) computational constraints
-learning_goal = 180 # stop criterion 1 (train mse to be reached)
+learning_goal = 200 # stop criterion 1 (train mse to be reached)
 max_epochs = 1000       # stop criterion 2 (max epochs in training)
 
 
 ## Crossvalidation
 # Create crossvalidation partition for evaluation
-K = 4
+K = 6
 CV = cross_validation.KFold(N,K,shuffle=True)
 
 # Initialize variables
@@ -76,6 +65,7 @@ Error_train_nofeatures = np.empty((K,1))
 Error_test_nofeatures = np.empty((K,1))
 Error_train_nn = np.empty((K,1))
 Error_test_nn = np.empty((K,1))
+linearModel_coef = list()
 Error_list_fs = list()
 Error_list_nn = list()
 k=0
@@ -96,7 +86,7 @@ for train_index, test_index in CV:
     m = lm.LinearRegression().fit(X_train, y_train)
     Error_train[k] = np.square(y_train-m.predict(X_train)).sum()/y_train.shape[0]
     Error_test[k] = np.square(y_test-m.predict(X_test)).sum()/y_test.shape[0]
-
+    linearModel_coef.append(m.coef_)
     # Compute squared error with feature subset selection
     #print skfs.f_regression(X_train, y_train, True)
     selected_features, features_record, loss_record = feature_selector_lr(X_train, y_train, internal_cross_validation)
@@ -107,14 +97,32 @@ for train_index, test_index in CV:
     
     
     m = lm.LinearRegression().fit(X_train[:,selected_features], y_train)
+
     Error_train_fs[k] = np.square(y_train-m.predict(X_train[:,selected_features])).sum()/y_train.shape[0]
     Error_test_fs[k] = np.square(y_test-m.predict(X_test[:,selected_features])).sum()/y_test.shape[0]
     Error_list_fs.append(abs(y_test-m.predict(X_test[:,selected_features])))
     #Compute neural network
-    ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
+    #ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
     # train network 
-    list_of_training_errors = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(100))    
-    Error_train_nn[k] = list_of_training_errors[-1]  
+    best_train_error = 1e100
+    for i in range(n_train):
+        # Create randomly initialized network with 2 layers
+        ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
+        # train network
+        #train_error = ann.train(X_train, y_train, epochs=max_epochs, show=round(max_epochs/8))
+        # stores the best network        
+        if train_error[-1]<best_train_error:
+            bestnet.append(ann)
+            best_train_error = train_error[-1]
+            #error_hist[range(len(train_error)),k] = train_error
+    #y_est = bestnet[k].sim(X_test)
+    
+    #errors[k] = (y_est!=y_test).sum().astype(float)/y_test.shape[0]        
+    
+    
+    #list_of_training_errors = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(100))    
+    #Error_train_nn[k] = list_of_training_errors[-1]  
+    Error_train_nn[k] = best_train_error      
     Error_test_nn[k] = np.square(y_test-ann.sim(X_test)).sum()/y_test.shape[0]
     Error_list_nn.append(abs(y_test - ann.sim(X_test)))
     
