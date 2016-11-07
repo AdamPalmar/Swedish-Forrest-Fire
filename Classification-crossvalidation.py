@@ -120,7 +120,7 @@ for train_index, test_index in CV:
     Error_list_fs.append(abs(y_test-m.predict(X_test[:,selected_features])))
     
     #Compute neural network
-   # ann = nl.net.newff([[0, 1], [0, 1]], [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
+    #ann = nl.net.newff([[0, 1], [0, 1]], [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
     
     # train network
     best_train_error = 1e100
@@ -129,6 +129,7 @@ for train_index, test_index in CV:
         ann = nl.net.newff(list_input_range, [n_hidden_units, 1], [nl.trans.TanSig(),nl.trans.PureLin()])
         # train network
         train_error = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))
+        # stores the best network        
         if train_error[-1]<best_train_error:
             bestnet.append(ann)
             best_train_error = train_error[-1]
@@ -138,7 +139,7 @@ for train_index, test_index in CV:
     errors[k] = (y_est!=y_test).sum().astype(float)/y_test.shape[0]
     print('Error rate: {0}%'.format(100*mean(errors)))
     #train_error             = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))
-    list_of_training_errors = ann.train(X_train, y_train, goal=learning_goal, epochs=max_epochs, show=round(max_epochs/8))    
+    list_of_training_errors = ann.train(X_train, y_train, epochs=max_epochs, show=round(max_epochs/8))    
     Error_train_nn[k] = list_of_training_errors[-1]  
     Error_test_nn[k] = np.square(y_test-ann.sim(X_test)).sum()/y_test.shape[0]
     Error_list_nn.append(abs(y_test - ann.sim(X_test)))
